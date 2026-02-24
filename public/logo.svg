@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="itaiji-logo-title">
+  <title id="itaiji-logo-title">itaiji - 画数の多い字形から少ない字形への変換を示すロゴ</title>
+  <g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="5" y="19" width="24" height="26" rx="5"/>
+    <path d="M10 27h14"/>
+    <path d="M10 33h14"/>
+    <path d="M10 39h10"/>
+  </g>
+  <g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="35" y="19" width="24" height="26" rx="5"/>
+    <path d="M40 30h14"/>
+    <path d="M47 26v14"/>
+  </g>
+  <g stroke="var(--logo-accent, #2e6e4e)" fill="var(--logo-accent, #2e6e4e)">
+    <path d="M27 12c3-4 7-4 10 0" fill="none" stroke-width="3" stroke-linecap="round"/>
+    <path d="M35 9.5l2.5 2.5-3.4 1.2z" stroke="none"/>
+  </g>
+</svg>
