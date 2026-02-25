@@ -5,11 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="旧字体・新字体・人名異体字を相互変換する字体ツール。240組の新旧対応表と異体字の字典つき"
+      content="旧字体・新字体・人名異体字を相互変換する字体ツール。新旧対応表と異体字の字典つき、ブラウザ内で完結"
     />
     <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f6f3ec" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#15140f" media="(prefers-color-scheme: dark)" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>itaiji | 旧字体・異体字変換</title>
+    <script>
+      // 描画前にテーマを確定し、ちらつき(FOUC)を防ぐ。logic は src/theme.ts と揃える。
+      (function () {
+        try {
+          var pref = localStorage.getItem('itaiji:theme');
+          if (pref !== 'light' && pref !== 'dark' && pref !== 'auto') pref = 'auto';
+          var dark =
+            pref === 'dark' ||
+            (pref === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+          var theme = dark ? 'dark' : 'light';
+          document.documentElement.dataset.theme = theme;
+          document.documentElement.style.colorScheme = theme;
+        } catch (e) {
+          /* localStorage が使えない環境でも描画は続ける */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>
