@@ -1,6 +1,15 @@
 import './style.css';
-import { allGroups, convert, lookupChar, modeLabels } from './lib';
-import type { CharInfo, Mode } from './lib';
+import {
+  allGroups,
+  convert,
+  decodeState,
+  encodeState,
+  lookupChar,
+  modeLabels,
+  rovingIndex,
+  summarizeChanges,
+} from './lib';
+import type { CharInfo, ChangeSummary, Mode } from './lib';
 import {
   isThemePref,
   nextThemePref,
@@ -51,6 +60,7 @@ const icons = {
   sample: `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h14v16l-7-3-7 3Z"/><path d="M9 9h6M9 12h6"/></svg>`,
   swap: `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 5 4 8l3 3"/><path d="M4 8h13a3 3 0 0 1 0 6h-1"/><path d="M17 19l3-3-3-3"/><path d="M20 16H7a3 3 0 0 1 0-6h1"/></svg>`,
   search: `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-3.6-3.6"/></svg>`,
+  link: `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 14.5 14.5 9.5"/><path d="M8 11 6 13a3.5 3.5 0 0 0 5 5l2-2"/><path d="M16 13l2-2a3.5 3.5 0 0 0-5-5l-2 2"/></svg>`,
 } as const;
 
 function mustFind<T extends Element>(selector: string): T {
@@ -120,6 +130,7 @@ app.innerHTML = `
         <div class="col output">
           <div class="col-bar">
             <span class="col-label">出力</span>
+            <button type="button" class="txt-btn" id="btn-share">${icons.link}<span>リンク</span></button>
             <button type="button" class="txt-btn" id="btn-swap">${icons.swap}<span>入力へ</span></button>
             <button type="button" class="txt-btn is-accent" id="btn-copy">${icons.copy}<span>コピー</span></button>
           </div>
@@ -127,6 +138,7 @@ app.innerHTML = `
         </div>
       </div>
       <div class="stats" id="stats" aria-live="polite"></div>
+      <ul class="changes" id="changes" aria-label="変換した字の一覧" hidden></ul>
     </div>
   </section>
 
@@ -161,6 +173,7 @@ const textarea = mustFind<HTMLTextAreaElement>('#input');
 const output = mustFind<HTMLDivElement>('#output');
 const modesBox = mustFind<HTMLDivElement>('#modes');
 const statsBar = mustFind<HTMLDivElement>('#stats');
+const changesBox = mustFind<HTMLUListElement>('#changes');
 const dictSearch = mustFind<HTMLInputElement>('#dict-search');
 const dictDetail = mustFind<HTMLDivElement>('#dict-detail');
 const dictGrid = mustFind<HTMLUListElement>('#dict-grid');
@@ -169,6 +182,7 @@ const btnSample = mustFind<HTMLButtonElement>('#btn-sample');
 const btnClear = mustFind<HTMLButtonElement>('#btn-clear');
 const btnSwap = mustFind<HTMLButtonElement>('#btn-swap');
 const btnCopy = mustFind<HTMLButtonElement>('#btn-copy');
+const btnShare = mustFind<HTMLButtonElement>('#btn-share');
 const themeToggle = mustFind<HTMLButtonElement>('#theme-toggle');
 
 let mode: Mode = 'to-shinjitai';
@@ -208,27 +222,42 @@ themeMedia.addEventListener('change', () => {
 
 /* ---- 変換 ---- */
 
+function selectMode(m: Mode): void {
+  mode = m;
+  try {
+    localStorage.setItem(MODE_KEY, m);
+  } catch {
+    // 保存できなくても動作は続ける
+  }
+  renderModes();
+  renderResult();
+  syncUrl();
+}
+
 function renderModes(): void {
   modesBox.textContent = '';
-  for (const m of MODES) {
+  MODES.forEach((m, i) => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'mode';
     btn.setAttribute('role', 'tab');
-    btn.setAttribute('aria-selected', String(mode === m));
+    const selected = mode === m;
+    btn.setAttribute('aria-selected', String(selected));
+    // ロービングtabindex: 選択中のタブだけをタブ順に置き、矢印で移動する
+    btn.tabIndex = selected ? 0 : -1;
     btn.textContent = modeLabels[m];
-    btn.addEventListener('click', () => {
-      mode = m;
-      try {
-        localStorage.setItem(MODE_KEY, m);
-      } catch {
-        // 保存できなくても動作は続ける
-      }
-      renderModes();
-      renderResult();
+    btn.addEventListener('click', () => selectMode(m));
+    btn.addEventListener('keydown', (e) => {
+      const next = rovingIndex(i, MODES.length, e.key);
+      if (next === null) return;
+      e.preventDefault();
+      const target = MODES[next];
+      if (!target) return;
+      selectMode(target);
+      (modesBox.children[next] as HTMLElement | undefined)?.focus();
     });
     modesBox.append(btn);
-  }
+  });
 }
 
 function renderResult(): void {
@@ -267,8 +296,45 @@ function renderResult(): void {
 
   const chars = [...textarea.value.replace(/\s/g, '')].length;
   statsBar.innerHTML = `<span><b>${chars}</b> 字</span><span>変換 <b>${result.changed}</b> 字</span>`;
+  renderChanges(summarizeChanges(result));
   btnCopy.disabled = convertedText === '';
+  btnShare.disabled = textarea.value.trim() === '';
   btnSwap.disabled = convertedText === '' || convertedText === textarea.value;
+}
+
+function renderChanges(summary: ChangeSummary[]): void {
+  changesBox.textContent = '';
+  if (summary.length === 0) {
+    changesBox.hidden = true;
+    return;
+  }
+  changesBox.hidden = false;
+  for (const c of summary) {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'change-chip';
+    btn.setAttribute(
+      'aria-label',
+      `${c.from}を${c.to}に変換${c.count > 1 ? `(${c.count}回)` : ''}。字典で確認`,
+    );
+    const from = document.createElement('span');
+    from.className = 'chip-from';
+    from.textContent = c.from;
+    const to = document.createElement('span');
+    to.className = 'chip-to';
+    to.textContent = c.to;
+    btn.append(from, to);
+    if (c.count > 1) {
+      const n = document.createElement('span');
+      n.className = 'chip-count';
+      n.textContent = String(c.count);
+      btn.append(n);
+    }
+    btn.addEventListener('click', () => showDetail(lookupChar(c.to) ?? lookupChar(c.from)));
+    li.append(btn);
+    changesBox.append(li);
+  }
 }
 
 function showDetail(info: CharInfo | undefined): void {
@@ -310,6 +376,10 @@ function showDetail(info: CharInfo | undefined): void {
   note.textContent = info.note ?? '先頭が新字体。残りは旧字体で、戦前の印刷物などで使われた字形。';
 
   dictDetail.append(chips, meta, note);
+  // 切り替えのたびに入場アニメを焚き直す(reduced-motion時はCSSで無効)
+  dictDetail.classList.remove('is-in');
+  void dictDetail.offsetWidth;
+  dictDetail.classList.add('is-in');
   dictDetail.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
@@ -347,12 +417,21 @@ function persist(): void {
   }
 }
 
+/** 現在のモードと本文をURLのハッシュへ反映し、そのまま共有・再読込できるようにする。 */
+function syncUrl(): void {
+  const hash = encodeState({ mode, text: textarea.value });
+  history.replaceState(null, '', `${location.pathname}${location.search}#${hash}`);
+}
+
 /* ---- イベント ---- */
 
 textarea.addEventListener('input', () => {
   persist();
   clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(renderResult, 140);
+  debounceTimer = setTimeout(() => {
+    renderResult();
+    syncUrl();
+  }, 140);
 });
 
 dictSearch.addEventListener('input', () => {
@@ -361,16 +440,27 @@ dictSearch.addEventListener('input', () => {
   if (first) showDetail(lookupChar(first));
 });
 
+dictSearch.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && dictSearch.value !== '') {
+    e.stopPropagation();
+    dictSearch.value = '';
+    renderDict();
+    dictDetail.hidden = true;
+  }
+});
+
 btnSample.addEventListener('click', () => {
   textarea.value = SAMPLE_TEXT;
   persist();
   renderResult();
+  syncUrl();
 });
 
 btnClear.addEventListener('click', () => {
   textarea.value = '';
   persist();
   renderResult();
+  syncUrl();
   textarea.focus();
 });
 
@@ -379,6 +469,7 @@ btnSwap.addEventListener('click', () => {
   textarea.value = convertedText;
   persist();
   renderResult();
+  syncUrl();
 });
 
 btnCopy.addEventListener('click', () => {
@@ -389,6 +480,25 @@ btnCopy.addEventListener('click', () => {
     label.textContent = 'コピーした';
     setTimeout(() => (label.textContent = 'コピー'), 1500);
   });
+});
+
+btnShare.addEventListener('click', () => {
+  syncUrl();
+  void navigator.clipboard?.writeText(location.href).then(() => {
+    const label = btnShare.querySelector('span');
+    if (!label) return;
+    label.textContent = 'コピーした';
+    setTimeout(() => (label.textContent = 'リンク'), 1500);
+  });
+});
+
+// 「/」で字典検索へ移動する(入力中のフィールドにいるときは素通り)
+document.addEventListener('keydown', (e) => {
+  if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+  const t = e.target as HTMLElement | null;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  e.preventDefault();
+  dictSearch.focus();
 });
 
 /* ---- 初期化 ---- */
@@ -408,6 +518,20 @@ try {
 } catch {
   textarea.value = SAMPLE_TEXT;
 }
+
+// 共有リンク(URLのハッシュ)があれば、保存済みの状態より優先する
+const shared = decodeState(location.hash);
+if (shared.mode) mode = shared.mode;
+if (shared.text !== undefined) textarea.value = shared.text;
+
+window.addEventListener('hashchange', () => {
+  const next = decodeState(location.hash);
+  if (next.mode) mode = next.mode;
+  if (next.text !== undefined) textarea.value = next.text;
+  persist();
+  renderModes();
+  renderResult();
+});
 
 applyTheme();
 renderModes();
