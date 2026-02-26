@@ -1,25 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 400" role="img" aria-label="itaijiのアーキテクチャ図">
   <title>itaijiのアーキテクチャ: 字体データから変換と字典引きを導き、UIで提示する流れ</title>
   <style>
-    .box { fill: #fdfefc; stroke: #d8e0d5; rx: 10; }
-    .zone { fill: #ecf0ea; stroke: #dde4da; rx: 14; }
-    .t { font-family: 'Hiragino Sans','Noto Sans JP',system-ui,sans-serif; fill: #222822; }
+    .box { fill: #f6f3ec; stroke: #c9c1ad; rx: 2; }
+    .zone { fill: none; stroke: #ddd6c5; rx: 2; }
+    .t { font-family: 'Hiragino Sans','Noto Sans JP',system-ui,sans-serif; fill: #211f19; }
     .h { font-size: 13px; font-weight: 600; }
-    .s { font-size: 11px; fill: #687468; }
-    .zl { font-size: 11px; font-weight: 600; fill: #2e6e4e; letter-spacing: 1px; }
-    .arrow { stroke: #687468; stroke-width: 1.6; fill: none; marker-end: url(#head); }
+    .s { font-size: 11px; fill: #837d6e; }
+    .zl { font-size: 11px; font-weight: 600; fill: #2f6b49; letter-spacing: 2px; text-transform: uppercase; }
+    .arrow { stroke: #837d6e; stroke-width: 1.4; fill: none; marker-end: url(#head); }
     @media (prefers-color-scheme: dark) {
-      .box { fill: #1e231d; stroke: #333b31; }
-      .zone { fill: #191d18; stroke: #272d25; }
-      .t { fill: #e7ebe5; }
-      .s { fill: #9aa698; }
-      .zl { fill: #7ac9a3; }
-      .arrow { stroke: #9aa698; }
+      .box { fill: #1d1b15; stroke: #43402f; }
+      .zone { stroke: #322f25; }
+      .t { fill: #ece6d7; }
+      .s { fill: #8c8472; }
+      .zl { fill: #84c9a4; }
+      .arrow { stroke: #8c8472; }
+      #head path { fill: #8c8472; }
     }
   </style>
   <defs>
     <marker id="head" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
-      <path d="M0 0 L7 4 L0 8 Z" fill="#687468"/>
+      <path d="M0 0 L7 4 L0 8 Z" fill="#837d6e"/>
     </marker>
   </defs>
 
