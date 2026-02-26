@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { convert, normalizeVariants, toKyujitai, toShinjitai } from './convert';
+import { convert, normalizeVariants, summarizeChanges, toKyujitai, toShinjitai } from './convert';
 import { PAIRS } from './data/kyujitai';
 
 describe('新字体から旧字体へ', () => {
@@ -68,5 +68,24 @@ describe('convertの断片', () => {
     expect(r.segments).toEqual([]);
     expect(r.text).toBe('');
     expect(r.changed).toBe(0);
+  });
+});
+
+describe('summarizeChanges', () => {
+  it('同じ置換をまとめ、出現回数の多い順に並べる', () => {
+    const r = convert('国国国学学校', 'to-kyujitai');
+    expect(summarizeChanges(r)).toEqual([
+      { from: '国', to: '國', count: 3 },
+      { from: '学', to: '學', count: 2 },
+    ]);
+  });
+
+  it('置換が同数なら元の字のコードポイント順に並べる', () => {
+    const summary = summarizeChanges(convert('学国', 'to-kyujitai'));
+    expect(summary.map((s) => s.from)).toEqual(['国', '学']);
+  });
+
+  it('変換が無ければ空配列を返す', () => {
+    expect(summarizeChanges(convert('ひらがな', 'to-kyujitai'))).toEqual([]);
   });
 });
